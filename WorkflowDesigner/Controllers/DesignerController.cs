@@ -18,53 +18,40 @@ namespace WorkflowDesigner.Controllers
         {
             return View();
         }
-        public async Task<ActionResult> Api()
+
+        public async Task<ActionResult> API()
         {
             Stream filestream = null;
-            var parameters = new NameValueCollection();
+            if (Request.Files.Count > 0)
+                filestream = Request.Files[0].InputStream;
 
-            //Defining the request method
-            var isPost = Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase);
+            var pars = new NameValueCollection();
+            pars.Add(Request.QueryString);
 
-            //Parse the parameters in the query string
-            foreach (var q in Request.QueryString)
+            if (Request.HttpMethod.Equals("POST", StringComparison.InvariantCultureIgnoreCase))
             {
-                parameters.Add(q.ToString(), Request.QueryString[q.ToString()]);
-            }
-
-            if (isPost)
-            {
-                //Parsing the parameters passed in the form
-                var keys = parameters.AllKeys;
-
-                foreach (string key in keys)
+                var parsKeys = pars.AllKeys;
+                //foreach (var key in Request.Form.AllKeys)
+                foreach (string key in Request.Form.Keys)
                 {
-                    if (!keys.Contains(key))
+                    if (!parsKeys.Contains(key))
                     {
-                        parameters.Add(key, Request.Form[key].ToString());
+                        pars.Add(key, Request.Unvalidated[key]);
                     }
                 }
-
-                //If a file is passed
-                if (Request.Files.Count > 0)
-                {
-                    //Save file
-                    filestream = Request.Files[0].InputStream;
-                }
             }
 
-            //Calling the Designer Api and store answer
-            var (result, hasError) = await WorkflowInit.Runtime.DesignerAPIAsync(parameters, filestream);
+            (string res, bool hasError) = await WorkflowInit.Runtime.DesignerAPIAsync(pars, filestream);
 
-            //If it returns a file, send the response in a special way
-            if (parameters["operation"]?.ToLower() == "downloadscheme" && !hasError)
-                return File(Encoding.UTF8.GetBytes(result), "text/xml");
+            var operation = pars["operation"].ToLower();
+            if (operation == "downloadscheme" && !hasError)
+                return File(Encoding.UTF8.GetBytes(res), "text/xml");
+            else if (operation == "downloadschemebpmn" && !hasError)
+                return File(UTF8Encoding.UTF8.GetBytes(res), "text/xml");
 
-            if (parameters["operation"]?.ToLower() == "downloadschemebpmn" && !hasError)
-                return File(Encoding.UTF8.GetBytes(result), "text/xml");
-
-            //response
-            return Content(result);
+            return Content(res);
         }
+
+
     }
 }
